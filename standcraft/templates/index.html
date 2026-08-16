@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Апгрейдер</title>
+    <!-- Telegram WebApp SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        /* Стили в стиле Telegram */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: var(--tg-theme-bg-color, #fff);
+            color: var(--tg-theme-text-color, #000);
+            margin: 0;
+            padding: 16px;
+            box-sizing: border-box;
+        }
+        .tab-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        .tab-btn {
+            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            color: var(--tg-theme-text-color, #000);
+            cursor: pointer;
+            flex: 1 0 auto;
+            text-align: center;
+        }
+        .tab-btn.active {
+            background: var(--tg-theme-button-color, #40a7e3);
+            color: var(--tg-theme-button-text-color, #fff);
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .card {
+            background: var(--tg-theme-secondary-bg-color, #f9f9f9);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+        .balance {
+            font-size: 20px;
+            font-weight: bold;
+        }
+        .btn {
+            background: var(--tg-theme-button-color, #40a7e3);
+            color: var(--tg-theme-button-text-color, #fff);
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 8px;
+        }
+        .btn-danger {
+            background: #e34a4a;
+        }
+        .input-field {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--tg-theme-hint-color, #ccc);
+            border-radius: 8px;
+            font-size: 16px;
+            margin-bottom: 8px;
+            background: var(--tg-theme-bg-color, #fff);
+            color: var(--tg-theme-text-color, #000);
+            box-sizing: border-box;
+        }
+        .win-chance-bar {
+            width: 100%;
+            height: 20px;
+            background: #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 8px 0;
+        }
+        .win-chance-fill {
+            height: 100%;
+            background: #4caf50;
+            border-radius: 10px;
+            transition: width 0.3s;
+        }
+        .inventory-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+        }
+        .inventory-item button {
+            background: var(--tg-theme-button-color, #40a7e3);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 4px 12px;
+            cursor: pointer;
+        }
+        .message {
+            margin: 8px 0;
+            padding: 8px;
+            border-radius: 8px;
+            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+        }
+        .admin-panel {
+            border-top: 2px solid #ccc;
+            padding-top: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="balance" id="balanceDisplay">Баланс: 0</div>
+        <div id="userInfo"></div>
+
+        <div class="tab-bar">
+            <button class="tab-btn active" data-tab="main">Главная</button>
+            <button class="tab-btn" data-tab="upgrade">Апгрейд скина</button>
+            <button class="tab-btn" data-tab="upgrade_balance">Апгрейд баланса</button>
+            <button class="tab-btn" data-tab="deposit">Пополнение</button>
+            <button class="tab-btn" data-tab="promo">Промокоды</button>
+            <button class="tab-btn" data-tab="help">Инструкции</button>
+            <button class="tab-btn" id="adminTab" style="display:none;" data-tab="admin">Админ</button>
+        </div>
+
+        <!-- Вкладка "Главная" -->
+        <div id="tab-main" class="tab-content active">
+            <div class="card">
+                <h3>Добро пожаловать в апгрейдер!</h3>
+                <p>Здесь вы можете улучшать свои скины или делать ставки на баланс.</p>
+                <p>Выберите нужный раздел в меню выше.</p>
+            </div>
+        </div>
+
+        <!-- Вкладка "Апгрейд скина" -->
+        <div id="tab-upgrade" class="tab-content">
+            <div class="card">
+                <h3>Апгрейд скина</h3>
+                <p>Выберите скин из инвентаря, чтобы попытаться улучшить его.</p>
+                <div id="inventoryList"></div>
+                <div id="upgradeResult" class="message" style="display:none;"></div>
+            </div>
+        </div>
+
+        <!-- Вкладка "Апгрейд баланса" -->
+        <div id="tab-upgrade_balance" class="tab-content">
+            <div class="card">
+                <h3>Апгрейд баланса</h3>
+                <p>Поставьте часть баланса на кон и попытайтесь умножить его.</p>
+                <input type="number" id="betAmount" class="input-field" placeholder="Сумма ставки" min="0.01" step="0.01">
+                <input type="number" id="betMultiplier" class="input-field" placeholder="Множитель (1.5, 2, 3...)" min="1" step="0.1" value="2">
+                <button id="doBalanceUpgrade" class="btn">Апгрейднуть баланс</button>
+                <div id="balanceUpgradeResult" class="message" style="display:none;"></div>
+            </div>
+        </div>
+
+        <!-- Вкладка "Пополнение" -->
+        <div id="tab-deposit" class="tab-content">
+            <div class="card">
+                <h3>Пополнить баланс</h3>
+                <p>Укажите сумму и создайте счёт для оплаты криптовалютой.</p>
+                <input type="number" id="depositAmount" class="input-field" placeholder="Сумма USD" min="1" step="1">
+                <button id="createInvoiceBtn" class="btn">Создать счёт</button>
+                <div id="invoiceResult" class="message" style="display:none;"></div>
+            </div>
+        </div>
+
+        <!-- Вкладка "Промокоды" -->
+        <div id="tab-promo" class="tab-content">
+            <div class="card">
+                <h3>Промокоды</h3>
+                <p>Введите промокод для получения бонуса.</p>
+                <input type="text" id="promoCodeInput" class="input-field" placeholder="Введите код">
+                <button id="applyPromoBtn" class="btn">Активировать</button>
+                <div id="promoResult" class="message" style="display:none;"></div>
+            </div>
+        </div>
+
+        <!-- Вкладка "Инструкции" -->
+        <div id="tab-help" class="tab-content">
+            <div class="card">
+                <h3>Инструкции и FAQ</h3>
+                <p><b>Как играть?</b></p>
+                <p>Выберите раздел "Апгрейд скина" и нажмите на скин, чтобы попытаться улучшить его до более дорогого. Шанс зависит от разницы в цене.</p>
+                <p>Также можно делать ставки на баланс в разделе "Апгрейд баланса".</p>
+                <p><b>Как пополнить?</b></p>
+                <p>В разделе "Пополнение" создайте счёт и оплатите его через Crypto Pay. Средства зачислятся автоматически.</p>
+                <p><b>Честная игра?</b></p>
+                <p>Шансы рассчитываются на сервере. Администраторы могут влиять на шансы отдельных игроков только в исключительных случаях (например, для тестирования).</p>
+                <p>Все транзакции логируются.</p>
+            </div>
+        </div>
+
+        <!-- Вкладка "Админ" (скрыта по умолчанию) -->
+        <div id="tab-admin" class="tab-content admin-panel">
+            <div class="card">
+                <h3>Админ-панель</h3>
+                <div>
+                    <h4>Установить шанс игроку</h4>
+                    <input type="text" id="adminUserId" class="input-field" placeholder="Telegram ID">
+                    <input type="number" id="adminWinRate" class="input-field" placeholder="Шанс (0-100) или пусто для сброса" min="0" max="100">
+                    <button id="setWinRateBtn" class="btn">Установить</button>
+                    <div id="winRateResult" class="message" style="display:none;"></div>
+                </div>
+                <hr>
+                <div>
+                    <h4>Создать промокод</h4>
+                    <input type="text" id="newPromoCode" class="input-field" placeholder="Код">
+                    <select id="newPromoType" class="input-field">
+                        <option value="balance">Баланс</option>
+                        <option value="item">Предмет (скин)</option>
+                    </select>
+                    <input type="text" id="newPromoReward" class="input-field" placeholder="Награда (сумма или название скина)">
+                    <input type="number" id="newPromoMaxUses" class="input-field" placeholder="Макс. использований" value="1">
+                    <button id="createPromoBtn" class="btn">Создать</button>
+                    <div id="createPromoResult" class="message" style="display:none;"></div>
+                </div>
+                <hr>
+                <div>
+                    <h4>Список промокодов</h4>
+                    <button id="listPromosBtn" class="btn">Обновить</button>
+                    <div id="promoList"></div>
+                </div>
+                <hr>
+                <div>
+                    <h4>Удалить промокод</h4>
+                    <input type="text" id="deletePromoCode" class="input-field" placeholder="Код">
+                    <button id="deletePromoBtn" class="btn btn-danger">Удалить</button>
+                    <div id="deletePromoResult" class="message" style="display:none;"></div>
+                </div>
+                <hr>
+                <div>
+                    <h4>Поиск пользователей</h4>
+                    <input type="text" id="searchUserQuery" class="input-field" placeholder="ID или часть username">
+                    <button id="searchUserBtn" class="btn">Найти</button>
+                    <div id="searchUserResult"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Инициализация Telegram WebApp
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+
+        // Получение initData
+        const initData = tg.initData;
+
+        // Глобальные переменные
+        let currentUser = null;
+        let currentTab = 'main';
+
+        // Функция для отправки запросов с initData в заголовке
+        async function apiCall(url, method = 'POST', data = null) {
+            const headers = {
+                'X-Init-Data': initData,
+                'Content-Type': 'application/json'
+            };
+            const options = {
+                method: method,
+                headers: headers,
+            };
+            if (data) {
+                options.body = JSON.stringify(data);
+            }
+            const response = await fetch(url, options);
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.detail || 'Request failed');
+            }
+            return await response.json();
+        }
+
+        // Авторизация и получение данных пользователя
+        async function authUser() {
+            try {
+                const user = await apiCall('/auth', 'POST');
+                currentUser = user;
+                updateUI(user);
+                // Показываем админ-вкладку, если есть права
+                if (user.is_admin || user.is_moderator) {
+                    document.getElementById('adminTab').style.display = 'block';
+                }
+            } catch (error) {
+                alert('Ошибка авторизации: ' + error.message);
+            }
+        }
+
+        // Обновление интерфейса после получения данных
+        function updateUI(user) {
+            document.getElementById('balanceDisplay').textContent = 'Баланс: ' + user.balance.toFixed(2);
+            document.getElementById('userInfo').textContent = 'Пользователь: ' + (user.username || user.telegram_id);
+            // Обновляем инвентарь
+            renderInventory(user.inventory);
+        }
+
+        // Отображение инвентаря
+        function renderInventory(inventory) {
+            const container = document.getElementById('inventoryList');
+            if (inventory.length === 0) {
+                container.innerHTML = '<p>У вас пока нет скинов.</p>';
+                return;
+            }
+            let html = '';
+            inventory.forEach(item => {
+                html += `
+                    <div class="inventory-item">
+                        <span>${item.name} (${item.value})</span>
+                        <button data-inv-id="${item.id}">Апгрейдить</button>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+            // Навешиваем обработчики на кнопки апгрейда
+            container.querySelectorAll('button[data-inv-id]').forEach(btn => {
+                btn.addEventListener('click', async function() {
+                    const invId = this.dataset.invId;
+                    await doUpgrade(invId);
+                });
+            });
+        }
+
+        // Апгрейд скина
+        async function doUpgrade(inventoryId) {
+            const resultDiv = document.getElementById('upgradeResult');
+            resultDiv.style.display = 'block';
+            resultDiv.textContent = 'Обработка...';
+            try {
+                const result = await apiCall('/api/upgrade', 'POST', { inventory_id: inventoryId });
+                let msg = `Шанс: ${result.win_chance.toFixed(1)}%<br>`;
+                if (result.success) {
+                    msg += `🎉 Успех! Вы получили: ${result.target_skin.name} (${result.target_skin.value})`;
+                } else {
+                    msg += `😢 Неудача! Предмет потерян.`;
+                }
+                resultDiv.innerHTML = msg;
+                // Обновляем данные пользователя
+                await refreshUserData();
+            } catch (error) {
+                resultDiv.textContent = 'Ошибка: ' + error.message;
+            }
+        }
+
+        // Апгрейд баланса
+        document.getElementById('doBalanceUpgrade').addEventListener('click', async function() {
+            const amount = parseFloat(document.getElementById('betAmount').value);
+            const multiplier = parseFloat(document.getElementById('betMultiplier').value);
+            if (!amount || amount <= 0) {
+                alert('Введите корректную сумму');
+                return;
+            }
+            if (multiplier < 1) {
+                alert('Множитель должен быть >= 1');
+                return;
+            }
+            const resultDiv = document.getElementById('balanceUpgradeResult');
+            resultDiv.style.display = 'block';
+            resultDiv.textContent = 'Обработка...';
+            try {
+                const result = await apiCall('/api/upgrade_balance', 'POST', { amount, multiplier });
+                let msg = `Шанс: ${result.win_chance.toFixed(1)}%<br>`;
+                if (result.success) {
+                    msg += `🎉 Вы выиграли! Баланс: ${result.new_balance.toFixed(2)} (+${result.win_amount.toFixed(2)})`;
+                } else {
+                    msg += `😢 Проигрыш! Баланс: ${result.new_balance.toFixed(2)}`;
+                }
+                resultDiv.innerHTML = msg;
+                await refreshUserData();
+            } catch (error) {
+                resultDiv.textContent = 'Ошибка: ' + error.message;
+            }
+        });
+
+        // Пополнение - создание инвойса
+        document.getElementById('createInvoiceBtn').addEventListener('click', async function() {
+            const amount = parseFloat(document.getElementById('depositAmount').value);
+            if (!amount || amount <= 0) {
+                alert('Введите сумму');
+                return;
+            }
+            const resultDiv = document.getElementById('invoiceResult');
+            resultDiv.style.display = 'block';
+            resultDiv.textContent = 'Создание счёта...';
+            try {
+                const result = await apiCall('/api/invoice/create', 'POST', { amount });
+                // Открываем ссылку на оплату
+                window.open(result.pay_url, '_blank');
+                resultDiv.innerHTML = `Счёт создан. После оплаты баланс пополнится автоматически. ID: ${result.invoice_id}`;
+                // Можно периодически проверять статус, но для простоты предлагаем обновить страницу позже
+            } catch (error) {
+                resultDiv.textContent = 'Ошибка: ' + error.message;
+            }
+        });
+
+        // Промокоды
+        document.getElementById('applyPromoBtn').addEventListener('click', async function() {
+            const code = document.getElementById('promoCodeInput').value.trim();
+            if (!code) {
+                alert('Введите код');
+                return;
+            }
+            const resultDiv = document.getElementById('promoResult');
+            resultDiv.style.display = 'block';
+            resultDiv.textContent = 'Активация...';
+            try {
+                const result = await apiCall('/api/promo/use', 'POST', { code });
+                let msg = `✅ Промокод активирован! Тип: ${result.type}, награда: ${result.reward}`;
+                resultDiv.innerHTML = msg;
+                await refreshUserData();
+            } catch (error) {
+                resultDiv.textContent = 'Ошибка: ' + error.message;
+            }
+        });
+
+        // Обновление данных пользователя (после действий)
+        async function refreshUserData() {
+            try {
+                const user = await apiCall('/api/user/me', 'GET');
+                currentUser = user;
+                updateUI(user);
+            } catch (error) {
+                console.error('Refresh error:', error);
+            }
+        }
+
+        // ---------- Админ-функции ----------
+
+        // Установка шанса
+        document.getElementById('setWinRateBtn').addEventListener('click', async function() {
+            const targetId = parseInt(document.getElementById('adminUserId').value);
+            const rateInput = document.getElementById('adminWinRate').value;
+            const rate = rateInput === '' ? null : parseFloat(rateInput);
+            if (!targetId) {
+                alert('Введите Telegram ID');
+                return;
+            }
+            if (rate !== null && (isNaN(rate) || rate < 0 || rate > 100)) {
+                alert('Шанс должен быть от 0 до 100');
+                return;
+            }
+            const resultDiv = document.getElementById('winRateResult');
+            resultDiv.style.display = 'block';
+            resultDiv.textContent = 'Отправка...';
+            try {
+                const result = await apiCall('/api/admin/set_win_rate', 'POST', { target_id: targetId, rate });
+                resultDiv.textContent = `Установлен шанс: ${result.new_rate !== null ? result.new_rate : 'сброшен (системный)'}`;
+            } catch (error) {
+                resultDiv.textContent = 'Ошибка: ' + error.message;
+            }
+        });
+
+        // Создание промокода
+        document.getElementById('createPromoBtn').addEventListener('click', async function() {
+            const code = document.getElementById('newPromoCode').value.trim();
+            const type = document.getElementById('newPromoType').value;
+            const reward = document.getElementById('newPromoReward').value.trim();
+            const maxUses = parseInt(document.getElementById('newPromoMaxUses').value) || 1;
+            if (!code || !reward) {
+                alert('Заполните все поля');
+                return;
+            }
+            const resultDiv = document.getElementById('createPromoResult');
+            resultDiv.style.display = 'block';
+            resultDiv.textContent = 'Создание...';
+            try {
+                const result = await apiCall('/api/admin/create_promo', 'POST', { code, type, reward, max_uses: maxUses });
+                resultDiv.textContent = `Промокод "${code}" создан!`;
+                // Обновить список промокодов
+                listPromos();
+            } catch (error) {
+                resultDiv.textContent = 'Ошибка: ' + error.message;
+            }
+        });
+
+        // Список промокодов
+        async function listPromos() {
+            const container = document.getElementById('promoList');
+            container.textContent = 'Загрузка...';
+            try {
+                const promos = await apiCall('/api/admin/promos', 'GET');
+                if (promos.length === 0) {
+                    container.innerHTML = '<p>Нет промокодов.</p>';
+                    return;
+                }
+                let html = '<ul>';
+                promos.forEach(p => {
+                    html += `<li>${p.code} (${p.type}) - ${p.reward} | использовано ${p.used_count}/${p.max_uses}</li>`;
+                });
+                html += '</ul>';
+                container.innerHTML = html;
+            } catch (error) {
+                container.textContent = 'Ошибка: ' + error.message;
+            }
+        }
+        document.getElementById('listPromosBtn').addEventListener('click', listPromos);
+
+        // Удаление промокода
+        document.getElementById('deletePromoBtn').addEventListener('click', async function() {
+            const code = document.getElementById('deletePromoCode').value.trim();
+            if (!code) {
+                alert('Введите код');
+                return;
+            }
+            const resultDiv = document.getElementById('deletePromoResult');
+            resultDiv.style.display = 'block';
+            resultDiv.textContent = 'Удаление...';
+            try {
+                await apiCall('/api/admin/delete_promo', 'POST', { code });
+                resultDiv.textContent = `Промокод "${code}" удалён.`;
+                listPromos();
+            } catch (error) {
+                resultDiv.textContent = 'Ошибка: ' + error.message;
+            }
+        });
+
+        // Поиск пользователей
+        document.getElementById('searchUserBtn').addEventListener('click', async function() {
+            const query = document.getElementById('searchUserQuery').value.trim();
+            if (!query) {
+                alert('Введите запрос');
+                return;
+            }
+            const container = document.getElementById('searchUserResult');
+            container.textContent = 'Поиск...';
+            try {
+                const users = await apiCall(`/api/admin/users?query=${encodeURIComponent(query)}`, 'GET');
+                if (users.length === 0) {
+                    container.innerHTML = '<p>Пользователи не найдены.</p>';
+                    return;
+                }
+                let html = '<ul>';
+                users.forEach(u => {
+                    html += `<li>ID: ${u.telegram_id}, Username: ${u.username || 'нет'}, Баланс: ${u.balance}, Шанс: ${u.custom_win_rate !== null ? u.custom_win_rate : 'системный'}</li>`;
+                });
+                html += '</ul>';
+                container.innerHTML = html;
+            } catch (error) {
+                container.textContent = 'Ошибка: ' + error.message;
+            }
+        });
+
+        // Переключение вкладок
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const tabName = this.dataset.tab;
+                // Скрыть все вкладки
+                document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+                document.querySelectorAll('.tab-btn').forEach(tb => tb.classList.remove('active'));
+                // Показать выбранную
+                document.getElementById(`tab-${tabName}`).classList.add('active');
+                this.classList.add('active');
+                currentTab = tabName;
+                // Если админ-вкладка, обновить списки
+                if (tabName === 'admin') {
+                    listPromos();
+                }
+            });
+        });
+
+        // Инициализация приложения
+        authUser();
+
+        // Переодическое обновление баланса (например, каждые 30 сек)
+        setInterval(refreshUserData, 30000);
+    </script>
+</body>
+</html>
